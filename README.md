@@ -161,3 +161,7 @@ of the licensor in the software. Any use of the licensor’s trademarks is subje
 to applicable law.
 
 Thank you for your compliance, we work hard on the development of KeyAuth and do not appreciate our copyright being infringed.
+
+## Example Sync
+On push to `main`, this repo can trigger the example repo CI via a repository dispatch event.
+Set `EXAMPLE_REPO_TOKEN` in this repo secrets (PAT with access to `ELF-Nigel/KeyAuth-CPP-Example`).

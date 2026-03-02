@@ -2522,6 +2522,28 @@ std::string KeyAuth::api::req(std::string data, const std::string& url) {
         ScopeWipe host_lower_wipe(host_lower);
         std::transform(host_lower.begin(), host_lower.end(), host_lower.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (!allowed_hosts.empty()) {
+            bool allowed = false;
+            for (const auto& entry : allowed_hosts) {
+                std::string entry_lower = entry;
+                std::transform(entry_lower.begin(), entry_lower.end(), entry_lower.begin(),
+                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (entry_lower.rfind("*.", 0) == 0) {
+                    auto suffix = entry_lower.substr(1);
+                    if (host_lower.size() >= suffix.size() &&
+                        host_lower.compare(host_lower.size() - suffix.size(), suffix.size(), suffix) == 0) {
+                        allowed = true;
+                        break;
+                    }
+                } else if (host_lower == entry_lower) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                error(XorStr("API host is not in allowed host list."));
+            }
+        }
         if (host_is_keyauth(host_lower)) {
             if (is_ip_literal(host_lower)) {
                 error(XorStr("API host must not be an IP literal."));
@@ -2549,6 +2571,10 @@ std::string KeyAuth::api::req(std::string data, const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 0L);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_CERTINFO, 1L);
     curl_easy_setopt(curl, CURLOPT_NOPROXY, XorStr("keyauth.win").c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
@@ -2558,6 +2584,17 @@ std::string KeyAuth::api::req(std::string data, const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, req_headers);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "KeyAuth");
+
+    if (!pinned_public_keys.empty()) {
+#ifdef CURLOPT_PINNEDPUBLICKEY
+        if (pinned_public_keys.size() > 1) {
+            error(XorStr("Multiple pinned public keys not supported."));
+        }
+        curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, pinned_public_keys.at(0).c_str());
+#else
+        error(XorStr("Pinned public key not supported by this libcurl build."));
+#endif
+    }
 
     // Perform the request
     CURLcode code = curl_easy_perform(curl);

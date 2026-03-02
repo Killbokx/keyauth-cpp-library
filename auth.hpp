@@ -1,6 +1,7 @@
 #include <includes.hpp>
 #include <xorstr.hpp>
 #include <random>
+#include <chrono>
 
 #define CURL_STATICLIB 
 
@@ -52,6 +53,17 @@ namespace KeyAuth {
 		static constexpr int kInitFailSleepMs = 1500;
 		static constexpr int kBadInputSleepMs = 3000;
 		static constexpr int kCloseSleepMs = 5000;
+		struct lockout_state {
+			int fails = 0;
+			std::chrono::steady_clock::time_point locked_until{};
+		};
+		static void init_fail_delay();
+		static void bad_input_delay();
+		static void close_delay();
+		static bool lockout_active(const lockout_state& state);
+		static int lockout_remaining_ms(const lockout_state& state);
+		static void record_login_fail(lockout_state& state, int max_attempts = 3, int lock_seconds = 30);
+		static void reset_lockout(lockout_state& state);
 
 		class subscriptions_class {
 		public:

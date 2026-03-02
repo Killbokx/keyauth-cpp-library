@@ -1759,6 +1759,54 @@ std::string KeyAuth::api::expiry_remaining(const std::string& expiry)
     return out.str();
 }
 
+void KeyAuth::api::init_fail_delay()
+{
+    Sleep(kInitFailSleepMs);
+}
+
+void KeyAuth::api::bad_input_delay()
+{
+    Sleep(kBadInputSleepMs);
+}
+
+void KeyAuth::api::close_delay()
+{
+    Sleep(kCloseSleepMs);
+}
+
+bool KeyAuth::api::lockout_active(const lockout_state& state)
+{
+    return std::chrono::steady_clock::now() < state.locked_until;
+}
+
+int KeyAuth::api::lockout_remaining_ms(const lockout_state& state)
+{
+    if (!lockout_active(state))
+        return 0;
+    const auto now = std::chrono::steady_clock::now();
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(state.locked_until - now).count();
+    return remaining > 0 ? static_cast<int>(remaining) : 0;
+}
+
+void KeyAuth::api::record_login_fail(lockout_state& state, int max_attempts, int lock_seconds)
+{
+    if (max_attempts < 1)
+        max_attempts = 1;
+    if (lock_seconds < 1)
+        lock_seconds = 1;
+    state.fails += 1;
+    if (state.fails >= max_attempts) {
+        state.fails = 0;
+        state.locked_until = std::chrono::steady_clock::now() + std::chrono::seconds(lock_seconds);
+    }
+}
+
+void KeyAuth::api::reset_lockout(lockout_state& state)
+{
+    state.fails = 0;
+    state.locked_until = std::chrono::steady_clock::time_point{};
+}
+
 int VerifyPayload(std::string signature, std::string timestamp, std::string body)
 {
     if (!prologues_ok()) {

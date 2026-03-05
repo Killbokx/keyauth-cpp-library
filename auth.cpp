@@ -2112,31 +2112,42 @@ static bool host_resolves_private_only(const std::string& host, bool& has_public
 
 bool hosts_override_present(const std::string& host)
 {
-    if (host.empty())
-        return false;
-    std::string host_lower = host;
-    std::transform(host_lower.begin(), host_lower.end(), host_lower.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    const char* sysroot = std::getenv("SystemRoot");
-    std::string hosts_path = sysroot ? std::string(sysroot) : "C:\\Windows";
-    hosts_path += "\\System32\\drivers\\etc\\hosts";
-    std::ifstream file(hosts_path);
-    if (!file.good())
-        return false;
-    std::string line;
-    while (std::getline(file, line)) {
-        auto hash_pos = line.find('#');
-        if (hash_pos != std::string::npos)
-            line = line.substr(0, hash_pos);
-        std::transform(line.begin(), line.end(), line.begin(),
-            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (line.find(host_lower) == std::string::npos)
-            continue;
-        // basic whole-word check
-        if (line.find(" " + host_lower) != std::string::npos || line.find("\t" + host_lower) != std::string::npos)
-            return true;
-    }
-    return false;
+	if (host.empty())
+		return false;
+
+	std::string host_lower = host;
+	std::transform(host_lower.begin(), host_lower.end(), host_lower.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	const char* sysroot = std::getenv("SystemRoot");
+	std::string hosts_path = sysroot ? std::string(sysroot) : "C:\\Windows";
+	hosts_path += "\\System32\\drivers\\etc\\hosts";
+
+	// this will block the symlink/reparse tricks and attrs
+	const DWORD attr = GetFileAttributesA(hosts_path.c_str());
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return false;
+	if (attr & FILE_ATTRIBUTE_REPARSE_POINT) // symlink/junction
+		return true;
+
+	std::ifstream file(hosts_path);
+	if (!file.good())
+		return false;
+
+	std::string line;
+	while (std::getline(file, line)) {
+		auto hash_pos = line.find('#');
+		if (hash_pos != std::string::npos)
+			line = line.substr(0, hash_pos);
+
+		std::transform(line.begin(), line.end(), line.begin(),
+			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+		// word check example, this can always be improved
+		if (line.find(" " + host_lower) != std:string::npos || line.find("\t" + host_lower) != std::string::npos)
+			return true;
+	}
+	return false;
 }
 
 static std::wstring to_lower_ws(std::wstring value)

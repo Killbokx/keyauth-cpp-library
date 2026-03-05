@@ -126,6 +126,9 @@ void snapshot_text_page_protections();
 bool text_page_protections_ok();
 void snapshot_data_page_protections();
 bool data_page_protections_ok();
+static bool get_text_section_info(std::uintptr_t& base, size_t& size);
+static uint32_t rolling_crc32(const uint8_t* data, size_t len, size_t window = 64, size_t stride = 16);
+static bool get_export_address(HMODULE mod, const char* name, void*& out_addr);
  
 inline void secure_zero(std::string& value) noexcept;
 inline void securewipe(std::string& value) noexcept;
@@ -3324,7 +3327,7 @@ void error(std::string message) {
     LI_FN(__fastfail)(0);
 }
 // code submitted in pull request from https://github.com/Roblox932
-integrity( const char *section_name, bool fix = false ) -> bool
+auto check_section_integrity( const char *section_name, bool fix = false ) -> bool
 {
     const auto map_file = []( HMODULE hmodule ) -> std::tuple<std::uintptr_t, HANDLE>
     {

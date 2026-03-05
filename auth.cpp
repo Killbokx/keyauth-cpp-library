@@ -55,6 +55,7 @@
 #include <stdexcept>
 #include <ws2tcpip.h>
 #include <winhttp.h>
+#include <windns.h>
 #include <string>
 #include <array>
 
@@ -2112,6 +2113,61 @@ static bool host_resolves_private_only(const std::string& host, bool& has_public
     return all_private;
 }
 
+static void collect_ips_from_dns(PDNS_RECORD rec, std::vector<std::string>& out)
+{
+    for (auto p = rec; p; p = p->pNext) {
+        if (p->wType == DNS_TYPE_A) {
+            char buf[INET_ADDRSTRLEN] = {};
+            inet_ntop(AF_INET, &p->Data.A.IpAddress, buf, sizeof(buf));
+            out.emplace_back(buf);
+        } else if (p->wType == DNS_TYPE_AAAA) {
+            char buf[INET6_ADDRSTRLEN] = {};
+            inet_ntop(AF_INET6, &p->Data.AAAA.Ip6Address, buf, sizeof(buf));
+            out.emplace_back(buf);
+        }
+    }
+}
+
+static bool dns_cache_poisoned(const std::string& host)
+{
+    if (host.empty())
+        return false;
+
+    std::vector<std::string> cached;
+    std::vector<std::string> fresh;
+
+    PDNS_RECORD rec_cached = nullptr;
+    PDNS_RECORD rec_fresh = nullptr;
+
+    if (DnsQuery_A(host.c_str(), DNS_TYPE_A, DNS_QUERY_STANDARD, nullptr, &rec_cached, nullptr) == ERROR_SUCCESS) {
+        collect_ips_from_dns(rec_cached, cached);
+        DnsRecordListFree(rec_cached, DnsFreeRecordList);
+    }
+    if (DnsQuery_A(host.c_str(), DNS_TYPE_AAAA, DNS_QUERY_STANDARD, nullptr, &rec_cached, nullptr) == ERROR_SUCCESS) {
+        collect_ips_from_dns(rec_cached, cached);
+        DnsRecordListFree(rec_cached, DnsFreeRecordList);
+    }
+
+    if (DnsQuery_A(host.c_str(), DNS_TYPE_A, DNS_QUERY_BYPASS_CACHE, nullptr, &rec_fresh, nullptr) == ERROR_SUCCESS) {
+        collect_ips_from_dns(rec_fresh, fresh);
+        DnsRecordListFree(rec_fresh, DnsFreeRecordList);
+    }
+    if (DnsQuery_A(host.c_str(), DNS_TYPE_AAAA, DNS_QUERY_BYPASS_CACHE, nullptr, &rec_fresh, nullptr) == ERROR_SUCCESS) {
+        collect_ips_from_dns(rec_fresh, fresh);
+        DnsRecordListFree(rec_fresh, DnsFreeRecordList);
+    }
+
+    if (cached.empty() || fresh.empty())
+        return false;
+
+    std::sort(cached.begin(), cached.end());
+    cached.erase(std::unique(cached.begin(), cached.end()), cached.end());
+    std::sort(fresh.begin(), fresh.end());
+    fresh.erase(std::unique(fresh.begin(), fresh.end()), fresh.end());
+
+    return cached != fresh;
+}
+
 bool hosts_override_present(const std::string& host)
 {
 	if (host.empty())
@@ -2712,6 +2768,9 @@ std::string KeyAuth::api::req(std::string data, const std::string& url) {
             bool has_public = false;
             if (host_resolves_private_only(host_lower, has_public) && !has_public) {
                 error(XorStr("API host resolves to private or loopback."));
+            }
+            if (dns_cache_poisoned(host_lower)) {
+                error(XorStr("DNS cache poisoning detected for API host."));
             }
         }
     }

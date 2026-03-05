@@ -28,6 +28,7 @@
 #include <http.h>
 #include <stdlib.h>
 #include <atlstr.h>
+#include <windns.h>
 
 #include <ctime>
 #include <filesystem>
@@ -36,6 +37,7 @@
 #pragma comment(lib, "httpapi.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "wintrust.lib")
+#pragma comment(lib, "dnsapi.lib")
 
 #include <cstdio>
 #include <iostream>

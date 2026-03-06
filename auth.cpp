@@ -261,8 +261,7 @@ static bool suspicious_processes_present()
     const std::vector<std::string> bad = {
         "fiddler", "mitmproxy", "charles", "httpdebugger", "proxifier",
         "burpsuite", "wireshark", "tshark", "x64dbg", "x32dbg",
-        "ollydbg", "ida", "cheatengine", "processhacker",
-        "keyauth", "emulator"
+        "ollydbg", "ida", "cheatengine", "processhacker"
     };
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE)
@@ -288,7 +287,7 @@ static bool suspicious_modules_present()
 {
     const std::vector<std::string> bad = {
         "fiddlercore", "mitm", "charles", "httpdebugger", "proxifier",
-        "keyauth", "emulator", "dbghelp", "symsrv", "detours"
+        "detours"
     };
     HMODULE mods[1024];
     DWORD needed = 0;
@@ -311,7 +310,7 @@ static bool suspicious_windows_present()
     const std::vector<std::string> bad = {
         "fiddler", "mitmproxy", "charles", "burp", "http debugger",
         "x64dbg", "x32dbg", "ollydbg", "ida", "cheat engine",
-        "process hacker", "keyauth", "emulator"
+        "process hacker"
     };
     struct Ctx { const std::vector<std::string>* bad; bool hit; };
     Ctx ctx{ &bad, false };
